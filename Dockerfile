@@ -1,78 +1,11 @@
-# Start from debian
-FROM debian:stretch-slim
+FROM ros:foxy
 
-# Update so we can download packages
-RUN apt update
-#Set the ROS distro
-ENV ROS_DISTRO melodic
-
-# Add the ROS keys and package
-RUN apt install -y \
+# Update package list
+RUN apt-get update && apt-get install -y \
     lsb-release \
     curl \
-    gnupg
-RUN sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
-RUN curl -s "https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc" | apt-key add -
-
-# Install ROS
-RUN apt update
-RUN apt install -y \
-    ros-$ROS_DISTRO-desktop \
-    python-rosdep
-
-# Set up ROS
-RUN rosdep init
-RUN rosdep update
-
-# Install VNC and things to install noVNC
-RUN apt install -y \
-    tigervnc-standalone-server \
-    wget \
-    git \
-    unzip
-
-# Download NoVNC and unpack
-ENV NO_VNC_VERSION 1.3.0
-RUN wget -q https://github.com/novnc/noVNC/archive/v$NO_VNC_VERSION.zip
-RUN unzip v$NO_VNC_VERSION.zip
-RUN rm v$NO_VNC_VERSION.zip
-RUN git clone https://github.com/novnc/websockify /noVNC-$NO_VNC_VERSION/utils/websockify
-
-# Install a window manager
-RUN apt install -y \
-    openbox \
-    x11-xserver-utils \
-    xterm \
-    dbus-x11
-
-# Install the racecar simulator
-RUN apt install -y \
-    ros-$ROS_DISTRO-tf2-geometry-msgs \
-    ros-$ROS_DISTRO-ackermann-msgs \
-    ros-$ROS_DISTRO-joy \
-    ros-$ROS_DISTRO-map-server \
-    build-essential \
-    cython
-ENV SIM_WS /opt/ros/sim_ws
-RUN mkdir -p $SIM_WS/src
-RUN git clone https://github.com/mit-racecar/racecar_simulator.git
-RUN mv racecar_simulator $SIM_WS/src
-RUN /bin/bash -c 'source /opt/ros/$ROS_DISTRO/setup.bash; cd $SIM_WS; catkin_make; catkin_make install;'
-
-# Add the ROS master
-ENV ROS_MASTER_URI http://racecar:11311
-
-# Set the locale and keyboard
-RUN apt install -y \
-    locales
-RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-RUN locale-gen
-RUN DEBIAN_FRONTEND=noninteractive \
-    apt install -y \
-    console-setup
-
-# Install some cool programs
-RUN apt install -y \
+    gnupg \
+    locales \
     sudo \
     vim \
     emacs \
@@ -81,16 +14,68 @@ RUN apt install -y \
     screen \
     tmux \
     iputils-ping \
-    feh
+    feh \
+    wget \
+    git \
+    unzip
+
+# Set the ROS distro
+ENV ROS_DISTRO foxy
+
+# Add the ROS keys and package
+RUN sh -c 'echo "deb [arch=amd64,arm64] http://packages.ros.org/ros2/ubuntu focal main" > /etc/apt/sources.list.d/ros2-latest.list'
+RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add -
+
+# Install ROS2
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-desktop \
+    python3-rosdep
+
+# Set up ROS2
+RUN rosdep init
+RUN rosdep update
+
+# Install VNC and things to install noVNC
+RUN apt-get install -y \
+    tigervnc-standalone-server \
+    x11-xserver-utils \
+    xterm \
+    dbus-x11 \
+    openbox
+
+# Download NoVNC and unpack
+ENV NO_VNC_VERSION 1.3.0
+RUN wget -q https://github.com/novnc/noVNC/archive/v$NO_VNC_VERSION.zip
+RUN unzip v$NO_VNC_VERSION.zip
+RUN rm v$NO_VNC_VERSION.zip
+RUN git clone https://github.com/novnc/websockify /noVNC-$NO_VNC_VERSION/utils/websockify
+
+# Install the racecar simulator for ROS2
+RUN apt-get install -y \
+    ros-$ROS_DISTRO-compressed-image-transport \
+    ros-$ROS_DISTRO-joy \
+    ros-$ROS_DISTRO-map-server \
+    build-essential \
+    cython
+ENV SIM_WS /opt/ros/sim_ws
+RUN mkdir -p $SIM_WS/src
+RUN git clone https://github.com/mit-racecar/racecar_simulator.git
+RUN mv racecar_simulator $SIM_WS/src
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash; cd $SIM_WS; colcon build --symlink-install"
+
+# Add the ROS master
+ENV ROS_MASTER_URI http://racecar:11311
+
+# Set the locale and keyboard
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+RUN apt-get install -y console-setup
 
 # Fix some ROS things
-run apt install -y \
-    python-pip \
-    ros-$ROS_DISTRO-compressed-image-transport \
-    libfreetype6-dev
-RUN pip install -U pip
-RUN pip install imutils
-RUN pip install -U matplotlib
+RUN apt-get install -y \
+    python3-pip
+RUN pip3 install -U pip
+RUN pip3 install imutils
+RUN pip3 install -U matplotlib
 
 # Kill the bell!
 RUN echo "set bell-style none" >> /etc/inputrc
@@ -107,7 +92,7 @@ ADD ./config/openbox /etc/X11/openbox/
 COPY ./config/XTerm /etc/X11/app-defaults/
 COPY ./config/default.rviz /opt/ros/$ROS_DISTRO/share/rviz/
 
-# Creat a user
+# Create a user
 RUN useradd -ms /bin/bash racecar
 RUN echo 'racecar:racecar@mit' | chpasswd
 RUN adduser racecar sudo
